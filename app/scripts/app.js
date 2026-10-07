@@ -71,7 +71,9 @@ function start(client) {
   });
 }
 
-document.onreadystatechange = function () {
-  if (document.readyState !== "complete") return;
+function boot() {
   app.initialized().then(start).catch(logError);
-};
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();

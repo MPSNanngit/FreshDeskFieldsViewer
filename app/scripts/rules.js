@@ -38,7 +38,7 @@ function selected() {
 function markDirty() {
   S.dirty = true;
   $("save").disabled = !S.canEdit;
-  setStatus("Unsaved changes");
+  if (S.client) setStatus("Unsaved changes");
 }
 
 /* ---------- rendering ---------- */
@@ -286,6 +286,10 @@ function bindEvents() {
 function save() {
   const payload = { rules: S.rules.filter(function (r) { return r.fields && r.fields.length; }) };
   const skipped = S.rules.length - payload.rules.length;
+  if (!S.client) {
+    setStatus("Not connected to Freshdesk yet – cannot save. Reload the page and try again.", "error");
+    return Promise.resolve();
+  }
   if (JSON.stringify(payload).length > MAX_STORE_BYTES) {
     setStatus("Too many rules to save – combine or remove some.", "error");
     return Promise.resolve();
@@ -334,10 +338,9 @@ function checkEditor(client) {
 
 function start(client) {
   S.client = client;
-  bindEvents();
   setStatus("Loading…");
   return Promise.all([
-    loadRules(client).then(function (rules) { S.rules = rules; }),
+    loadRules(client).then(function (rules) { S.rules = rules.concat(S.rules); }), // keep rules made while loading
     loadMeta(client).catch(function (err) {
       logError(err);
       return "Could not load groups/fields from Freshdesk (" + (err && (err.status || err.message)) +
@@ -345,7 +348,7 @@ function start(client) {
     }),
     checkEditor(client)
   ]).then(function (res) {
-    S.selectedId = S.rules.length ? S.rules[0].id : null;
+    if (!selected()) S.selectedId = S.rules.length ? S.rules[0].id : null;
     renderAll();
     if (!S.canEdit) setStatus("View only – your email is not in the app's editor list.", "error");
     else if (typeof res[1] === "string") setStatus(res[1], "error");
@@ -357,6 +360,29 @@ function start(client) {
   });
 }
 
-document.addEventListener("DOMContentLoaded", function () {
-  app.initialized().then(start).catch(logError);
-});
+function connectionError(err) {
+  logError(err);
+  setStatus("Could not connect to Freshdesk (" + ((err && err.message) || err) +
+    "). Reload the page; if it persists, reinstall the app.", "error");
+}
+
+// The editor works immediately; saving and loading wait for the Freshdesk connection.
+function boot() {
+  bindEvents();
+  renderAll();
+  setStatus("Connecting to Freshdesk…");
+  if (typeof app === "undefined") {
+    connectionError(new Error("Freshdesk script did not load"));
+    return;
+  }
+  const timer = setTimeout(function () {
+    if (!S.client) connectionError(new Error("no response after 15s"));
+  }, 15000);
+  app.initialized().then(function (client) {
+    clearTimeout(timer);
+    return start(client);
+  }).catch(connectionError);
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
+else boot();

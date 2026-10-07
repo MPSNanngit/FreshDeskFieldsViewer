@@ -116,3 +116,21 @@ describe("show_only with required fields", () => {
       .toBe("Show only cf_a, cf_b only when Group is Test Group – required there: cf_b");
   });
 });
+
+describe("closing checks", () => {
+  it("detects resolved/closed", () => {
+    expect(E.isClosing(4)).toBe(true);
+    expect(E.isClosing("5")).toBe(true);
+    expect(E.isClosing(2)).toBe(false);
+  });
+
+  it("merges property updates onto the saved ticket", () => {
+    const saved = t({ status: 2, custom_fields: { cf_isbn: null, cf_x: "keep" } });
+    expect(E.mergeUpdate(saved, { status: 5, cf_isbn: "978" }).custom_fields).toEqual({ cf_isbn: "978", cf_x: "keep" });
+    expect(E.mergeUpdate(saved, { changedAttributes: { status: [2, 4], custom_fields: { cf_isbn: [null, "1"] } } }))
+      .toMatchObject({ status: 4, custom_fields: { cf_isbn: "1", cf_x: "keep" } });
+    expect(E.mergeUpdate(saved, { ticket: { status: 5 } }).status).toBe(5);
+    expect(E.mergeUpdate(undefined, undefined)).toEqual({ custom_fields: {} });
+    expect(saved.custom_fields.cf_isbn).toBe(null);
+  });
+});

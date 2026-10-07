@@ -331,7 +331,11 @@ function bindEvents() {
 /* ---------- data ---------- */
 
 function save() {
-  const payload = { rules: S.rules.filter(function (r) { return r.fields && r.fields.length; }) };
+  const payload = { rules: S.rules.filter(function (r) { return r.fields && r.fields.length; }), labels: {} };
+  // Field labels let the ticket page say "ISBN" instead of "cf_isbn" in its messages.
+  payload.rules.forEach(function (r) {
+    r.fields.forEach(function (f) { payload.labels[f] = FieldRules.labelOf(S.meta.fields, f); });
+  });
   const skipped = S.rules.length - payload.rules.length;
   if (!S.client) {
     setStatus("Not connected to Freshdesk yet – cannot save. Reload the page and try again.", "error");

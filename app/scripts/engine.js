@@ -149,7 +149,39 @@ const FieldRules = (function () {
       conds.join(rule.match === "any" ? " OR " : " AND ") + reqText;
   }
 
-  return { ATTRS: ATTRS, ATTR_LABELS: ATTR_LABELS, ACTION_LABELS: ACTION_LABELS,
+  const CLOSING_STATUSES = ["4", "5"]; // Resolved, Closed
+
+  function isClosing(status) {
+    return CLOSING_STATUSES.indexOf(norm(status)) !== -1;
+  }
+
+  function latest(v) {
+    return Array.isArray(v) && v.length === 2 ? v[1] : v; // [old, new] change pairs
+  }
+
+  /**
+   * Applies the values from a properties-update event onto a copy of the saved ticket, so
+   * required fields are checked against what the agent is about to save. Accepts flat values,
+   * [old, new] pairs, nested custom_fields and changedAttributes wrappers.
+   */
+  function mergeUpdate(ticket, data) {
+    const out = Object.assign({}, ticket || {});
+    out.custom_fields = Object.assign({}, (ticket && ticket.custom_fields) || {});
+    const src = (data && (data.changedAttributes || data.changes || data.ticket)) || data || {};
+    Object.keys(src).forEach(function (k) {
+      const v = latest(src[k]);
+      if (k === "custom_fields" && v && typeof v === "object") {
+        Object.keys(v).forEach(function (c) { out.custom_fields[c] = latest(v[c]); });
+      } else if (/^cf_/.test(k)) {
+        out.custom_fields[k] = v;
+      } else {
+        out[k] = v;
+      }
+    });
+    return out;
+  }
+
+  return { ATTRS: ATTRS, isClosing: isClosing, mergeUpdate: mergeUpdate, ATTR_LABELS: ATTR_LABELS, ACTION_LABELS: ACTION_LABELS,
            buildContext: buildContext, ruleMatches: ruleMatches, evaluate: evaluate,
            missingRequired: missingRequired, isBlank: isBlank, buildMeta: buildMeta,
            optionsFor: optionsFor, labelOf: labelOf, describeRule: describeRule };

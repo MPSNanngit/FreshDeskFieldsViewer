@@ -25,7 +25,7 @@ function logInfo() {
   console.info.apply(console, ["Field Rules:"].concat(Array.prototype.slice.call(arguments)));
 }
 
-const VERSION = "1.6";
+const VERSION = "1.7";
 const notified = {};
 const settings = { debug: false };
 
@@ -65,9 +65,14 @@ function setVisible(client, field, visible) {
   });
 }
 
-// Rules are written by the full-page editor (rules.html) to the app's data storage.
+// Rules (and field labels) are written by the full-page editor (rules.html) to the app's data storage.
+const labels = {};
+
 function loadRules(client) {
-  return client.db.get("field_rules").then(function (d) { return (d && d.rules) || []; }).catch(function (err) {
+  return client.db.get("field_rules").then(function (d) {
+    Object.assign(labels, (d && d.labels) || {});
+    return (d && d.rules) || [];
+  }).catch(function (err) {
     if (!err || err.status !== 404) logError(err);
     return [];
   });
@@ -102,12 +107,26 @@ function apply(client, rules, quiet) {
   }).catch(logError);
 }
 
-function guard(client, rules, event) {
-  return getTicket(client).then(function (ticket) {
+function eventData(event) {
+  try {
+    return Promise.resolve(event.helper.getData ? event.helper.getData() : null).catch(function () { return null; });
+  } catch (err) {
+    logError(err);
+    return Promise.resolve(null);
+  }
+}
+
+// kind: "close" (Close button), "reply" (send reply) or "update" (properties Update button).
+function guard(client, rules, event, kind) {
+  return Promise.all([getTicket(client), eventData(event)]).then(function (res) {
+    const ticket = kind === "update" ? FieldRules.mergeUpdate(res[0], res[1]) : res[0];
+    if (kind === "update" && !FieldRules.isClosing(ticket.status)) return event.helper.done();
     const result = FieldRules.evaluate(rules, ticket);
     const missing = FieldRules.missingRequired(result, ticket);
+    debugNotify(client, "caught " + kind + "; missing required: " + (missing.join(", ") || "none"));
     if (!missing.length) return event.helper.done();
-    return event.helper.fail("Please fill in the required field(s): " + missing.join(", "));
+    const names = missing.map(function (f) { return labels[f] || f; });
+    return event.helper.fail("Please fill in the required field(s) first: " + names.join(", "));
   }).catch(function (err) {
     logError(err);
     // never block the agent because of an app error
@@ -123,20 +142,21 @@ function start(client) {
   }).then(function (rules) {
     logInfo(rules.length + " rule(s) loaded");
     const reapply = function () { return apply(client, rules); };
-    const check = function (event) { return guard(client, rules, event); };
 
     reapply();
     // The properties panel can finish drawing after the app starts; apply again once it has.
     [1500, 4000].forEach(function (ms) {
       setTimeout(function () { apply(client, rules, true); }, ms);
     });
-    ["ticket.propertiesUpdated", "ticket.groupChanged", "ticket.typeChanged",
-     "ticket.statusChanged", "ticket.priorityChanged"].forEach(function (name) {
+    ["ticket.groupChanged", "ticket.typeChanged", "ticket.statusChanged", "ticket.priorityChanged"].forEach(function (name) {
       client.events.on(name, reapply);
     });
-    ["ticket.closeTicketClick", "ticket.sendReply"].forEach(function (name) {
-      client.events.on(name, check, { intercept: true });
-    });
+    // Update button: block saving a Resolved/Closed status with required fields empty, then re-apply visibility.
+    client.events.on("ticket.propertiesUpdated", function (event) {
+      return guard(client, rules, event, "update").then(function () { setTimeout(reapply, 500); });
+    }, { intercept: true });
+    client.events.on("ticket.closeTicketClick", function (event) { return guard(client, rules, event, "close"); }, { intercept: true });
+    client.events.on("ticket.sendReply", function (event) { return guard(client, rules, event, "reply"); }, { intercept: true });
   });
 }
 

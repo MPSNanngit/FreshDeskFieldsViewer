@@ -1,0 +1,21 @@
+{
+  "domain": {
+    "display_name": "Freshdesk domain",
+    "description": "Your helpdesk address without https://, e.g. holtzbrinckpublishersllc.freshdesk.com",
+    "type": "text",
+    "required": true
+  },
+  "api_key": {
+    "display_name": "Admin API key",
+    "description": "Used only to list groups, ticket types, portals and fields in the rule editor. Find it under Profile settings > View API key.",
+    "type": "text",
+    "required": true,
+    "secure": true
+  },
+  "editors": {
+    "display_name": "Who can edit rules (optional)",
+    "description": "Comma-separated agent emails allowed to change rules. Leave empty to let any agent who opens the editor change them.",
+    "type": "text",
+    "required": false
+  }
+}

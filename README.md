@@ -11,13 +11,18 @@ Each rule has an action, a set of fields, and conditions on **group, ticket type
 | Show fields only if… | hide unless conditions match ("view if group X") |
 | Require fields if… | Reply and Close are blocked until the fields are filled |
 
-Hidden fields are never treated as required. Rules are edited on the app's install/settings page and stored as JSON in the app configuration.
+Hidden fields are never treated as required.
+
+## Where things live
+- **Install settings** (standard Freshdesk form): helpdesk domain, admin API key (used only to list groups/types/portals/fields), optional list of editor emails.
+- **Rule editor**: full-page app in the left sidebar (`app/rules.html`). Rules are saved to the app's data storage (key `field_rules`, max ~8 KB).
+- **Ticket page**: `app/index.html` (background) reads the rules and applies them.
 
 ## Develop
 ```
 npm install npm test          # rule engine unit testsnpm test          # rule engine unit tests npm test   # rule engine unit tests (vitest)
 fdk run           # local test at <domain>/a/tickets/<id>?dev=true
-fdk pack          # package for upload
+fdk pack --skip-coverage   # package for upload (custom app)
 ```
 
 ## Limits

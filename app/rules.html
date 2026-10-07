@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Field Rules</title>
+    <link rel="stylesheet" href="styles/rules.css" />
+    <script src="https://static.freshdev.io/fdk/3.0/assets/freshdesk.js"></script>
+    <script src="scripts/engine.js"></script>
+    <script src="scripts/rules.js"></script>
+  </head>
+  <body>
+    <header class="top">
+      <div>
+        <h1>Field Rules</h1>
+        <p class="sub">Choose which ticket fields agents see and must fill in, by group, type, portal, source, priority or status.</p>
+      </div>
+      <div class="top-actions">
+        <span id="status" class="status" role="status"></span>
+        <button id="save" class="btn primary" disabled>Save changes</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="pane rules-pane" aria-label="Rules">
+        <div class="pane-head">
+          <h2>Rules <span id="rule-count" class="count"></span></h2>
+          <button id="add" class="btn small">+ New rule</button>
+        </div>
+        <ul id="rule-list" class="rule-list"></ul>
+      </section>
+
+      <section class="pane editor-pane" aria-label="Rule settings">
+        <div id="editor"></div>
+      </section>
+
+      <section class="pane fields-pane" aria-label="Fields">
+        <div class="pane-head">
+          <h2>Fields <span id="field-count" class="count"></span></h2>
+        </div>
+        <input id="field-search" class="search" type="search" placeholder="Search fields…" />
+        <ul id="field-list" class="field-list"></ul>
+        <div id="field-manual" class="manual" hidden>
+          <input id="field-manual-input" type="text" placeholder="Type a field name (e.g. cf_order_number) and press Enter" />
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

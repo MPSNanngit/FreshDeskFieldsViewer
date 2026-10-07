@@ -2,10 +2,11 @@
   "getGroups": {
     "schema": {
       "method": "GET",
-      "host": "<%= context.domain %>",
+      "protocol": "https",
+      "host": "<%= iparam.domain %>",
       "path": "/api/v2/groups?per_page=100",
       "headers": {
-        "Authorization": "Basic <%= encode(context.api_key) %>",
+        "Authorization": "Basic <%= encode(iparam.api_key) %>",
         "Content-Type": "application/json"
       }
     }
@@ -13,10 +14,11 @@
   "getTicketFields": {
     "schema": {
       "method": "GET",
-      "host": "<%= context.domain %>",
+      "protocol": "https",
+      "host": "<%= iparam.domain %>",
       "path": "/api/v2/ticket_fields",
       "headers": {
-        "Authorization": "Basic <%= encode(context.api_key) %>",
+        "Authorization": "Basic <%= encode(iparam.api_key) %>",
         "Content-Type": "application/json"
       }
     }
@@ -24,10 +26,11 @@
   "getProducts": {
     "schema": {
       "method": "GET",
-      "host": "<%= context.domain %>",
+      "protocol": "https",
+      "host": "<%= iparam.domain %>",
       "path": "/api/v2/products",
       "headers": {
-        "Authorization": "Basic <%= encode(context.api_key) %>",
+        "Authorization": "Basic <%= encode(iparam.api_key) %>",
         "Content-Type": "application/json"
       }
     }

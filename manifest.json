@@ -6,6 +6,12 @@
         "getGroups": {},
         "getTicketFields": {},
         "getProducts": {}
+      },
+      "location": {
+        "full_page_app": {
+          "url": "rules.html",
+          "icon": "styles/images/icon.svg"
+        }
       }
     },
     "support_ticket": {

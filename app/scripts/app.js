@@ -14,13 +14,12 @@ function logError(err) {
   console.error("Fields Viewer:", err);
 }
 
-function parseRules(raw) {
-  try {
-    return JSON.parse(raw || "[]");
-  } catch (err) {
-    logError(err);
+// Rules are written by the full-page editor (rules.html) to the app's data storage.
+function loadRules(client) {
+  return client.db.get("field_rules").then(function (d) { return (d && d.rules) || []; }).catch(function (err) {
+    if (!err || err.status !== 404) logError(err);
     return [];
-  }
+  });
 }
 
 function getTicket(client) {
@@ -57,8 +56,7 @@ function guard(client, rules, event) {
 }
 
 function start(client) {
-  return client.iparams.get().then(function (ip) {
-    const rules = parseRules(ip.rules);
+  return loadRules(client).then(function (rules) {
     const reapply = function () { return apply(client, rules); };
     const check = function (event) { return guard(client, rules, event); };
 

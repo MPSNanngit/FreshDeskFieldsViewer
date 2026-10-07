@@ -88,8 +88,65 @@ const FieldRules = (function () {
     });
   }
 
-  return { ATTRS: ATTRS, buildContext: buildContext, ruleMatches: ruleMatches,
-           evaluate: evaluate, missingRequired: missingRequired, isBlank: isBlank };
+  const ATTR_LABELS = { group: "Group", type: "Type", product: "Portal", source: "Source",
+                        priority: "Priority", status: "Status" };
+  const ACTION_LABELS = { hide: "Hide", show_only: "Show only", require: "Require" };
+
+  // Fixed Freshdesk values; groups, types, portals and fields come from the API (see buildMeta).
+  const STATIC_OPTIONS = {
+    priority: [["1", "Low"], ["2", "Medium"], ["3", "High"], ["4", "Urgent"]],
+    status: [["2", "Open"], ["3", "Pending"], ["4", "Resolved"], ["5", "Closed"]],
+    source: [["1", "Email"], ["2", "Portal"], ["3", "Phone"], ["7", "Chat"],
+             ["9", "Feedback widget"], ["10", "Outbound email"]]
+  };
+
+  // Ticket-field API names that differ from the ticket property the rules check.
+  const FIELD_PROP = { ticket_type: "type", group: "group_id", agent: "responder_id", product: "product_id" };
+  const NOT_RULE_FIELDS = ["requester", "company", "subject", "description"];
+
+  /** Turns /groups, /ticket_fields and /products responses into option lists [[value, label]]. */
+  function buildMeta(groups, ticketFields, products) {
+    const meta = { group: [], product: [], type: [], fields: [] };
+    (groups || []).forEach(function (g) { meta.group.push([String(g.id), g.name]); });
+    (products || []).forEach(function (p) { meta.product.push([String(p.id), p.name]); });
+    (ticketFields || []).forEach(function (f) {
+      const custom = /^custom_/.test(f.field_type || "");
+      if (f.name === "ticket_type") meta.type = (f.choices || []).map(function (c) { return [c, c]; });
+      if (!custom && NOT_RULE_FIELDS.indexOf(f.name) !== -1) return;
+      const prop = custom ? f.name.replace(/_\d+$/, "") : (FIELD_PROP[f.name] || f.name);
+      meta.fields.push([prop, f.label || f.name]);
+    });
+    return meta;
+  }
+
+  function optionsFor(attr, meta) {
+    return STATIC_OPTIONS[attr] || (meta && meta[attr]) || [];
+  }
+
+  function labelOf(list, value) {
+    const hit = (list || []).filter(function (o) { return o[0] === String(value); })[0];
+    return hit ? hit[1] : String(value);
+  }
+
+  /** Plain-English sentence for a rule, e.g. "Hide Priority when Group is Billing". */
+  function describeRule(rule, meta) {
+    const fields = (rule.fields || []).map(function (f) { return labelOf(meta && meta.fields, f); });
+    const what = (ACTION_LABELS[rule.action] || rule.action) + " " +
+      (fields.length ? fields.join(", ") : "(no fields)");
+    const conds = (rule.conditions || []).filter(function (c) { return (c.values || []).length; })
+      .map(function (c) {
+        const vals = c.values.map(function (v) { return labelOf(optionsFor(c.attr, meta), v); });
+        return ATTR_LABELS[c.attr] + (c.op === "not_in" ? " is not " : " is ") + vals.join(" or ");
+      });
+    if (!conds.length) return rule.action === "show_only" ? what + " (never shown: add a condition)" : what + " always";
+    return what + (rule.action === "show_only" ? " only when " : " when ") +
+      conds.join(rule.match === "any" ? " OR " : " AND ");
+  }
+
+  return { ATTRS: ATTRS, ATTR_LABELS: ATTR_LABELS, ACTION_LABELS: ACTION_LABELS,
+           buildContext: buildContext, ruleMatches: ruleMatches, evaluate: evaluate,
+           missingRequired: missingRequired, isBlank: isBlank, buildMeta: buildMeta,
+           optionsFor: optionsFor, labelOf: labelOf, describeRule: describeRule };
 })();
 
 if (typeof module !== "undefined" && module.exports) module.exports = FieldRules;

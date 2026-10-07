@@ -12,6 +12,8 @@ function ifaceIds(field) {
   const ids = (INTERFACE_IDS[field] || [field]).slice();
   const trimmed = field.replace(/_\d+$/, ""); // older accounts expose custom fields without the numeric suffix
   if (ids.indexOf(trimmed) === -1) ids.push(trimmed);
+  const bare = trimmed.replace(/^cf_/, ""); // some screens use the field name without the cf_ prefix
+  if (ids.indexOf(bare) === -1) ids.push(bare);
   return ids;
 }
 
@@ -23,7 +25,7 @@ function logInfo() {
   console.info.apply(console, ["Field Rules:"].concat(Array.prototype.slice.call(arguments)));
 }
 
-const VERSION = "1.5";
+const VERSION = "1.6";
 const notified = {};
 const settings = { debug: false };
 
@@ -56,10 +58,10 @@ function setVisible(client, field, visible) {
     const worked = ok.filter(Boolean);
     if (worked.length) {
       logInfo(action, field, "via id", worked.join(", "));
-      return null;
+      return field + " → " + worked.join("/");
     }
     logError(action + " failed for " + field + " (tried " + ifaceIds(field).join(", ") + ")", errors);
-    return notifyFailure(client, field, errors[0]);
+    return notifyFailure(client, field, errors[0]).then(function () { return null; });
   });
 }
 
@@ -81,17 +83,22 @@ function managedFields(rules) {
   return Object.keys(managed);
 }
 
-function apply(client, rules) {
+function apply(client, rules, quiet) {
   return getTicket(client).then(function (ticket) {
     const result = FieldRules.evaluate(rules, ticket);
     const hidden = Object.keys(result.hidden);
     const required = Object.keys(result.required);
     logInfo("ticket", ticket.id, "group", ticket.group_id, "type", ticket.type, "→ hidden:", hidden, "required:", required);
-    debugNotify(client, rules.length + " rule(s); group " + ticket.group_id + "; hiding: " +
-      (hidden.join(", ") || "nothing") + "; required: " + (required.join(", ") || "nothing"));
     return Promise.all(managedFields(rules).map(function (f) {
       return setVisible(client, f, !result.hidden[f]);
-    })).then(function () { return result; });
+    })).then(function (accepted) {
+      if (!quiet) {
+        debugNotify(client, rules.length + " rule(s); group " + ticket.group_id + "; hiding: " +
+          (hidden.join(", ") || "nothing") + "; required: " + (required.join(", ") || "nothing") +
+          "; accepted ids: " + (accepted.filter(Boolean).join(", ") || "none"));
+      }
+      return result;
+    });
   }).catch(logError);
 }
 
@@ -119,6 +126,10 @@ function start(client) {
     const check = function (event) { return guard(client, rules, event); };
 
     reapply();
+    // The properties panel can finish drawing after the app starts; apply again once it has.
+    [1500, 4000].forEach(function (ms) {
+      setTimeout(function () { apply(client, rules, true); }, ms);
+    });
     ["ticket.propertiesUpdated", "ticket.groupChanged", "ticket.typeChanged",
      "ticket.statusChanged", "ticket.priorityChanged"].forEach(function (name) {
       client.events.on(name, reapply);

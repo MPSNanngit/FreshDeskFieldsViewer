@@ -1,17 +1,37 @@
 /* global FieldRules */
 /* Ticket-page runtime: hides/shows fields and blocks send/close when required fields are empty. */
 
-// Freshdesk interface ids for standard fields; custom fields use their own name (e.g. "cf_order_no").
-// Rules store the ticket property name, this maps it to the interface element id.
-const INTERFACE_ID = {
-  priority: "priority", status: "status", type: "type", group_id: "group",
-  responder_id: "agent", product_id: "product", source: "source"
+// Rules store the ticket property name (custom fields: their API name, e.g. "cf_cs_category").
+// The hide/show id Freshdesk expects can differ, so every likely id is tried.
+const INTERFACE_IDS = {
+  type: ["ticket_type", "type"], group_id: ["group", "group_id"], responder_id: ["agent", "responder_id"],
+  product_id: ["product", "product_id"]
 };
 
-function iface(field) { return INTERFACE_ID[field] || field; }
+function ifaceIds(field) {
+  const ids = (INTERFACE_IDS[field] || [field]).slice();
+  const trimmed = field.replace(/_\d+$/, ""); // older accounts expose custom fields without the numeric suffix
+  if (ids.indexOf(trimmed) === -1) ids.push(trimmed);
+  return ids;
+}
 
 function logError(err) {
-  console.error("Fields Viewer:", err);
+  console.error("Field Rules:", err);
+}
+
+function logInfo() {
+  console.info.apply(console, ["Field Rules:"].concat(Array.prototype.slice.call(arguments)));
+}
+
+function setVisible(client, field, visible) {
+  const action = visible ? "show" : "hide";
+  return Promise.all(ifaceIds(field).map(function (id) {
+    return client.interface.trigger(action, { id: id }).then(function () { return id; }).catch(function () { return null; });
+  })).then(function (ok) {
+    const worked = ok.filter(Boolean);
+    if (worked.length) logInfo(action, field, "via id", worked.join(", "));
+    else logError(action + " failed for " + field + " (tried " + ifaceIds(field).join(", ") + ")");
+  });
 }
 
 // Rules are written by the full-page editor (rules.html) to the app's data storage.
@@ -35,10 +55,11 @@ function managedFields(rules) {
 function apply(client, rules) {
   return getTicket(client).then(function (ticket) {
     const result = FieldRules.evaluate(rules, ticket);
-    managedFields(rules).forEach(function (f) {
-      client.interface.trigger(result.hidden[f] ? "hide" : "show", { id: iface(f) }).catch(logError);
-    });
-    return result;
+    logInfo("ticket", ticket.id, "group", ticket.group_id, "type", ticket.type, "→ hidden:",
+      Object.keys(result.hidden), "required:", Object.keys(result.required));
+    return Promise.all(managedFields(rules).map(function (f) {
+      return setVisible(client, f, !result.hidden[f]);
+    })).then(function () { return result; });
   }).catch(logError);
 }
 
@@ -57,6 +78,7 @@ function guard(client, rules, event) {
 
 function start(client) {
   return loadRules(client).then(function (rules) {
+    logInfo(rules.length + " rule(s) loaded");
     const reapply = function () { return apply(client, rules); };
     const check = function (event) { return guard(client, rules, event); };
 

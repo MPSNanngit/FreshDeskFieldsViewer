@@ -68,7 +68,7 @@ describe("FieldRules.buildMeta", () => {
     expect(meta.group).toEqual([["1", "Billing"]]);
     expect(meta.product).toEqual([["9", "Portal A"]]);
     expect(meta.type).toEqual([["Incident", "Incident"]]);
-    expect(meta.fields).toEqual([["type", "Type"], ["group_id", "Group"], ["cf_order", "Order #"], ["status", "status"]]);
+    expect(meta.fields).toEqual([["type", "Type"], ["group_id", "Group"], ["cf_order_123", "Order #"], ["status", "status"]]);
     expect(E.buildMeta()).toEqual({ group: [], product: [], type: [], fields: [] });
   });
 });
@@ -95,5 +95,24 @@ describe("FieldRules.describeRule", () => {
     expect(E.optionsFor("status").length).toBe(4);
     expect(E.optionsFor("group")).toEqual([]);
     expect(E.labelOf(undefined, 5)).toBe("5");
+  });
+});
+
+describe("show_only with required fields", () => {
+  const rule = { action: "show_only", fields: ["cf_a", "cf_b"], required: ["cf_b", "cf_gone"],
+    conditions: [{ attr: "group", op: "in", values: ["10"] }] };
+
+  it("requires the marked fields only where they are shown", () => {
+    const inGroup = E.evaluate([rule], t());
+    expect(inGroup.hidden).toEqual({});
+    expect(Object.keys(inGroup.required)).toEqual(["cf_b"]);
+    const elsewhere = E.evaluate([rule], t({ group_id: 99 }));
+    expect(Object.keys(elsewhere.hidden)).toEqual(["cf_a", "cf_b"]);
+    expect(elsewhere.required).toEqual({});
+  });
+
+  it("mentions required fields in the summary", () => {
+    expect(E.describeRule(rule, { group: [["10", "Test Group"]] }))
+      .toBe("Show only cf_a, cf_b only when Group is Test Group – required there: cf_b");
   });
 });

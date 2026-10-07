@@ -6,6 +6,7 @@
  *   id, name, enabled,
  *   action: "hide" | "show_only" | "require",
  *   fields: ["priority", "cf_order_number", ...],
+ *   required: ["cf_order_number"],   // show_only only: shown fields that must also be filled in
  *   match: "all" | "any",
  *   conditions: [{ attr: "group"|"type"|"product"|"source"|"priority"|"status",
  *                  op: "in" | "not_in", values: ["123", ...] }]
@@ -71,6 +72,7 @@ const FieldRules = (function () {
       (rule.fields || []).forEach(function (f) {
         if (rule.action === "hide" && m) add(hidden, f, rule.name);
         else if (rule.action === "show_only" && !m) add(hidden, f, rule.name);
+        else if (rule.action === "show_only" && (rule.required || []).indexOf(f) !== -1) add(required, f, rule.name);
         else if (rule.action === "require" && m) add(required, f, rule.name);
       });
     });
@@ -113,7 +115,7 @@ const FieldRules = (function () {
       const custom = /^custom_/.test(f.field_type || "");
       if (f.name === "ticket_type") meta.type = (f.choices || []).map(function (c) { return [c, c]; });
       if (!custom && NOT_RULE_FIELDS.indexOf(f.name) !== -1) return;
-      const prop = custom ? f.name.replace(/_\d+$/, "") : (FIELD_PROP[f.name] || f.name);
+      const prop = custom ? f.name : (FIELD_PROP[f.name] || f.name);
       meta.fields.push([prop, f.label || f.name]);
     });
     return meta;
@@ -138,9 +140,13 @@ const FieldRules = (function () {
         const vals = c.values.map(function (v) { return labelOf(optionsFor(c.attr, meta), v); });
         return ATTR_LABELS[c.attr] + (c.op === "not_in" ? " is not " : " is ") + vals.join(" or ");
       });
+    const req = rule.action === "show_only" ? (rule.required || []).filter(function (f) {
+      return (rule.fields || []).indexOf(f) !== -1;
+    }) : [];
+    const reqText = req.length ? " – required there: " + req.map(function (f) { return labelOf(meta && meta.fields, f); }).join(", ") : "";
     if (!conds.length) return rule.action === "show_only" ? what + " (never shown: add a condition)" : what + " always";
     return what + (rule.action === "show_only" ? " only when " : " when ") +
-      conds.join(rule.match === "any" ? " OR " : " AND ");
+      conds.join(rule.match === "any" ? " OR " : " AND ") + reqText;
   }
 
   return { ATTRS: ATTRS, ATTR_LABELS: ATTR_LABELS, ACTION_LABELS: ACTION_LABELS,

@@ -38,7 +38,7 @@ function selected() {
 function markDirty() {
   S.dirty = true;
   $("save").disabled = !S.canEdit;
-  if (S.client) setStatus("Unsaved changes");
+  if (S.client) setStatus("Unsaved changes – click Save to apply them to tickets", "warn");
 }
 
 /* ---------- rendering ---------- */
@@ -130,7 +130,9 @@ function renderEditor() {
     '<div class="row"><input id="rule-name" class="name-input" value="' + esc(r.name || "") + '" placeholder="Rule name" />' +
     '<label class="toggle"><input type="checkbox" id="rule-enabled"' + (r.enabled !== false ? " checked" : "") + " /> Enabled</label></div>" +
     '<div><div class="label">What should happen to the selected fields?</div>' +
-    seg("action", r.action, [["hide", "Hide when…"], ["show_only", "Show only when…"], ["require", "Require when…"]]) + "</div>" +
+    seg("action", r.action, [["hide", "Hide when…"], ["show_only", "Show only when…"], ["require", "Require when…"]]) +
+    (r.action === "show_only" ? '<div class="hint">Tick <b>Required</b> next to a field on the right to also make it mandatory where it is shown.</div>' : "") +
+    "</div>" +
     '<div><div class="row" style="justify-content:space-between"><div class="label">Conditions</div>' +
     seg("match", r.match === "any" ? "any" : "all", [["all", "Match ALL"], ["any", "Match ANY"]]) + "</div>" +
     '<div style="margin-top:6px">' + (conds || '<div class="label" style="font-weight:400">No conditions – applies to every ticket.</div>') + "</div>" +
@@ -160,10 +162,14 @@ function renderFields() {
     $("field-list").innerHTML = '<li class="empty">' + (all.length ? "No fields match." : "Field list unavailable – type field names below.") + "</li>";
     return;
   }
+  const canRequire = r.action === "show_only";
   $("field-list").innerHTML = shown.map(function (o) {
     const on = (r.fields || []).indexOf(o[0]) !== -1;
-    return '<li><label><input type="checkbox" data-field="' + esc(o[0]) + '"' + (on ? " checked" : "") + " />" +
-      esc(o[1]) + '<span class="key">' + esc(o[0]) + "</span></label></li>";
+    const req = on && canRequire ? '<label class="req-toggle" title="Also required where shown">' +
+      '<input type="checkbox" data-required="' + esc(o[0]) + '"' + ((r.required || []).indexOf(o[0]) !== -1 ? " checked" : "") +
+      " />Required</label>" : "";
+    return '<li class="field-row"><label><input type="checkbox" data-field="' + esc(o[0]) + '"' + (on ? " checked" : "") + " />" +
+      '<span class="fname">' + esc(o[1]) + '</span><span class="key">' + esc(o[0]) + "</span></label>" + req + "</li>";
   }).join("");
 }
 
@@ -248,6 +254,7 @@ function bindEvents() {
     if (t.closest("[data-seg]")) {
       const key = t.closest("[data-seg]").dataset.seg;
       change(function (r) { r[key] = d.val; });
+      renderFields();
     } else if (t.id === "add-cond") {
       change(function (r) { r.conditions.push({ attr: "group", op: "in", values: [] }); });
     } else if (d.removeCond) {
@@ -286,12 +293,22 @@ function bindEvents() {
 
   $("field-list").addEventListener("change", function (e) {
     const f = e.target.dataset.field;
-    if (!f) return;
-    change(function (r) {
-      r.fields = (r.fields || []).filter(function (x) { return x !== f; });
-      if (e.target.checked) r.fields.push(f);
-    });
-    $("field-count").textContent = "(" + selected().fields.length + " selected)";
+    const req = e.target.dataset.required;
+    if (req) {
+      change(function (r) {
+        r.required = (r.required || []).filter(function (x) { return x !== req; });
+        if (e.target.checked) r.required.push(req);
+      });
+    } else if (f) {
+      change(function (r) {
+        r.fields = (r.fields || []).filter(function (x) { return x !== f; });
+        r.required = (r.required || []).filter(function (x) { return x !== f; });
+        if (e.target.checked) r.fields.push(f);
+      });
+      renderFields();
+    } else {
+      return;
+    }
     refreshSummary();
   });
 

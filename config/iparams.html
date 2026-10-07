@@ -146,12 +146,18 @@ function getConfigs(c){
   render();
   if (c.domain && c.api_key) $("load").click();
 }
+// Never block installing: the domain/API key only feed the dropdowns, and rules
+// without fields are dropped on save (see savedRules).
 function validate(){
-  return !!$("domain").value.trim() && !!$("api_key").value.trim() &&
-    rules.every(function(r){ return r.fields && r.fields.length; });
+  var skipped = rules.length - savedRules().length;
+  if (skipped) setStatus(skipped + " rule(s) with no fields were not saved.", true);
+  return true;
+}
+function savedRules(){
+  return rules.filter(function(r){ return r.fields && r.fields.length; });
 }
 function postConfigs(){
-  return { __meta: { secure: ["api_key"] }, domain: domainValue(), api_key: $("api_key").value.trim(), rules: JSON.stringify(rules) };
+  return { __meta: { secure: ["api_key"] }, domain: domainValue(), api_key: $("api_key").value.trim(), rules: JSON.stringify(savedRules()) };
 }
 </script>
 </body>

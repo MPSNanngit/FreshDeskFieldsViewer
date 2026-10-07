@@ -1,8 +1,11 @@
-import { defineConfig } from "vitest/config";
-
-export default defineConfig({
+module.exports = {
   test: {
     include: ["tests/**/*.test.js"],
-    coverage: { provider: "v8", include: ["app/scripts/engine.js"], reporter: ["text"] }
+    coverage: {
+      provider: "v8",
+      include: ["app/scripts/engine.js"],
+      reportsDirectory: "coverage/unit",
+      reporter: ["text", "json", "json-summary", "lcov"]
+    }
   }
-});
+};

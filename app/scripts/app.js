@@ -23,7 +23,15 @@ function logInfo() {
   console.info.apply(console, ["Field Rules:"].concat(Array.prototype.slice.call(arguments)));
 }
 
+const VERSION = "1.5";
 const notified = {};
+const settings = { debug: false };
+
+function debugNotify(client, message) {
+  if (!settings.debug) return Promise.resolve();
+  return client.interface.trigger("showNotify", { type: "info", message: "Field Rules v" + VERSION + ": " + message })
+    .catch(logError);
+}
 
 // Pops up a Freshdesk notice (once per field) so problems are visible without opening the console.
 function notifyFailure(client, field, err) {
@@ -76,8 +84,11 @@ function managedFields(rules) {
 function apply(client, rules) {
   return getTicket(client).then(function (ticket) {
     const result = FieldRules.evaluate(rules, ticket);
-    logInfo("ticket", ticket.id, "group", ticket.group_id, "type", ticket.type, "→ hidden:",
-      Object.keys(result.hidden), "required:", Object.keys(result.required));
+    const hidden = Object.keys(result.hidden);
+    const required = Object.keys(result.required);
+    logInfo("ticket", ticket.id, "group", ticket.group_id, "type", ticket.type, "→ hidden:", hidden, "required:", required);
+    debugNotify(client, rules.length + " rule(s); group " + ticket.group_id + "; hiding: " +
+      (hidden.join(", ") || "nothing") + "; required: " + (required.join(", ") || "nothing"));
     return Promise.all(managedFields(rules).map(function (f) {
       return setVisible(client, f, !result.hidden[f]);
     })).then(function () { return result; });
@@ -98,7 +109,11 @@ function guard(client, rules, event) {
 }
 
 function start(client) {
-  return loadRules(client).then(function (rules) {
+  return client.iparams.get().then(function (ip) {
+    settings.debug = ip.debug === true || ip.debug === "true";
+  }).catch(logError).then(function () {
+    return loadRules(client);
+  }).then(function (rules) {
     logInfo(rules.length + " rule(s) loaded");
     const reapply = function () { return apply(client, rules); };
     const check = function (event) { return guard(client, rules, event); };

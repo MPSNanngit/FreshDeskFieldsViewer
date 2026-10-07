@@ -17,5 +17,12 @@
     "description": "Comma-separated agent emails allowed to change rules. Leave empty to let any agent who opens the editor change them.",
     "type": "text",
     "required": false
+  },
+  "debug": {
+    "display_name": "Show diagnostic pop-ups on tickets",
+    "description": "For testing only: every ticket shows a pop-up saying what Field Rules decided to hide or require. Turn off when done.",
+    "type": "checkbox",
+    "default_value": false,
+    "required": false
   }
 }

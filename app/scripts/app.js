@@ -51,7 +51,8 @@ function guard(client, rules, event) {
     return event.helper.fail("Please fill in the required field(s): " + missing.join(", "));
   }).catch(function (err) {
     logError(err);
-    event.helper.done(); // never block the agent because of an app error
+    // never block the agent because of an app error
+    return Promise.resolve(event.helper.done()).catch(logError);
   });
 }
 

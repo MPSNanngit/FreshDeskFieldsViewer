@@ -1,4 +1,3 @@
-/* global module */
 /*
  * Rule engine: pure functions, no Freshdesk dependencies (unit-tested with vitest).
  *

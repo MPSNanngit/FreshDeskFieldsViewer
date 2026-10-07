@@ -1,2 +1,12 @@
-{ "name": "freshdesk-fields-viewer", "version": "1.0.0", "private": true,
-  "scripts": { "test": "node --test test/engine.test.js" } }
+{
+  "name": "freshdesk-fields-viewer",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@vitest/coverage-v8": "^4.0.0",
+    "vitest": "^4.0.0"
+  }
+}

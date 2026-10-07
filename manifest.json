@@ -6,13 +6,19 @@
         "getGroups": {},
         "getTicketFields": {},
         "getProducts": {}
-      },
+      }
+    },
+    "support_ticket": {
       "location": {
         "ticket_background": {
-          "url": "app/index.html"
+          "url": "index.html",
+          "icon": "styles/images/icon.svg"
         }
       }
     }
+  },
+  "scripts": {
+    "fdk-unit-test": "vitest run --coverage"
   },
   "engines": {
     "node": "24.11.1",

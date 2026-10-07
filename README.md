@@ -15,7 +15,7 @@ Hidden fields are never treated as required. Rules are edited on the app's insta
 
 ## Develop
 ```
-npm test          # rule engine unit tests
+npm install npm test          # rule engine unit testsnpm test          # rule engine unit tests npm test   # rule engine unit tests (vitest)
 fdk run           # local test at <domain>/a/tickets/<id>?dev=true
 fdk pack          # package for upload
 ```

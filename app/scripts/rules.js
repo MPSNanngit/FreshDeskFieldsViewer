@@ -72,14 +72,40 @@ function valuePicker(cond, idx) {
       '<button type="button" data-remove-value="' + idx + '" data-val="' + esc(v) + '" title="Remove">×</button></span>';
   }).join("");
   const free = options.filter(function (o) { return chosen.indexOf(o[0]) === -1; });
-  let adder;
-  if (options.length) {
-    adder = free.length ? '<select data-add-value="' + idx + '"><option value="">+ add…</option>' +
-      free.map(function (o) { return '<option value="' + esc(o[0]) + '">' + esc(o[1]) + "</option>"; }).join("") + "</select>" : "";
-  } else {
+  let adder = "";
+  if (options.length && free.length) {
+    adder = '<input data-type-value="' + idx + '" list="dl-' + idx + '" placeholder="Search ' +
+      esc(FieldRules.ATTR_LABELS[cond.attr].toLowerCase()) + 's to add…" />' +
+      '<datalist id="dl-' + idx + '">' +
+      free.map(function (o) { return '<option value="' + esc(o[1]) + '"></option>'; }).join("") + "</datalist>";
+  } else if (!options.length) {
     adder = '<input data-type-value="' + idx + '" placeholder="Type an id or name, press Enter" />';
   }
   return '<div class="chips">' + chips + adder + "</div>";
+}
+
+// Matches typed text to an option: exact label/id first, then a single partial match.
+function resolveValue(attr, text, exactOnly) {
+  const options = FieldRules.optionsFor(attr, S.meta);
+  const q = text.trim().toLowerCase();
+  if (!q) return null;
+  if (!options.length) return exactOnly ? null : text.trim();
+  const exact = options.filter(function (o) { return o[1].toLowerCase() === q || o[0].toLowerCase() === q; });
+  if (exact.length) return exact[0][0];
+  if (exactOnly) return null;
+  const partial = options.filter(function (o) { return o[1].toLowerCase().indexOf(q) !== -1; });
+  return partial.length === 1 ? partial[0][0] : null;
+}
+
+function addValue(idx, value) {
+  change(function (r) {
+    const vals = r.conditions[idx].values;
+    if (vals.indexOf(value) === -1) vals.push(value);
+  });
+  renderEditor();
+  refreshSummary();
+  const next = document.querySelector('[data-type-value="' + idx + '"]');
+  if (next) next.focus();
 }
 
 function renderEditor() {
@@ -185,6 +211,13 @@ function bindEvents() {
   });
 
   $("editor").addEventListener("input", function (e) {
+    const d = e.target.dataset;
+    if (d.typeValue) {
+      // Picking from the search list fills in the full name; add it straight away.
+      const v = resolveValue(selected().conditions[+d.typeValue].attr, e.target.value, true);
+      if (v) addValue(+d.typeValue, v);
+      return;
+    }
     if (e.target.id === "rule-name") change(function (r) { r.name = e.target.value; });
     refreshSummary();
   });
@@ -195,7 +228,6 @@ function bindEvents() {
     if (t.id === "rule-enabled") change(function (r) { r.enabled = t.checked; });
     else if (d.condAttr) change(function (r) { r.conditions[+d.condAttr] = { attr: t.value, op: "in", values: [] }; });
     else if (d.condOp) change(function (r) { r.conditions[+d.condOp].op = t.value; });
-    else if (d.addValue && t.value) change(function (r) { r.conditions[+d.addValue].values.push(t.value); });
     else return;
     renderEditor();
     refreshSummary();
@@ -204,11 +236,9 @@ function bindEvents() {
   $("editor").addEventListener("keydown", function (e) {
     const d = e.target.dataset;
     if (e.key !== "Enter" || !d.typeValue) return;
-    const v = e.target.value.trim();
-    if (!v) return;
-    change(function (r) { r.conditions[+d.typeValue].values.push(v); });
-    renderEditor();
-    refreshSummary();
+    const v = resolveValue(selected().conditions[+d.typeValue].attr, e.target.value, false);
+    if (v) addValue(+d.typeValue, v);
+    else setStatus("No single match for \"" + e.target.value + "\" – pick one from the list.", "error");
   });
 
   $("editor").addEventListener("click", function (e) {

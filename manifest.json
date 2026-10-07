@@ -1,0 +1,21 @@
+{
+  "platform-version": "3.0",
+  "modules": {
+    "common": {
+      "requests": {
+        "getGroups": {},
+        "getTicketFields": {},
+        "getProducts": {}
+      },
+      "location": {
+        "ticket_background": {
+          "url": "app/index.html"
+        }
+      }
+    }
+  },
+  "engines": {
+    "node": "18.20.8",
+    "fdk": "9.7.4"
+  }
+}

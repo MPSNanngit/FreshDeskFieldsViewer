@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<script src="https://static.freshdev.io/fdk/3.0/assets/freshdesk.js"></script>
+<script src="../app/scripts/engine.js"></script>
+<style>
+  body{font:14px system-ui,sans-serif;margin:16px;color:#12344d}
+  h2{margin:.2em 0}.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:6px 0}
+  input,select,button{font:inherit;padding:6px;border:1px solid #b9c4cc;border-radius:4px;background:#fff}
+  button{cursor:pointer}button.primary{background:#2c5cc5;color:#fff;border-color:#2c5cc5}
+  .rule{border:1px solid #d5dde3;border-radius:6px;padding:10px;margin:10px 0;background:#f8fafb}
+  .cond{margin-left:16px}select[multiple]{min-width:200px;height:90px}
+  .muted{color:#667}.err{color:#b00020}
+</style>
+</head>
+<body>
+<h2>Field visibility &amp; required rules</h2>
+<p class="muted">Rules apply on the ticket details page. Hide / show-only control visibility; Require blocks Reply and Close until the fields are filled.</p>
+<div class="row">
+  <input id="domain" placeholder="acme.freshdesk.com" size="28" />
+  <input id="api_key" type="password" placeholder="Admin API key" size="28" />
+  <button id="load">Load groups &amp; fields</button><span id="status" class="muted"></span>
+</div>
+<div id="rules"></div>
+<button id="add" class="primary">+ Add rule</button>
+
+<script>
+var client, rules = [], meta = { fields: [], group: [], product: [], type: [] };
+var STATIC = {
+  priority: [["1","Low"],["2","Medium"],["3","High"],["4","Urgent"]],
+  status: [["2","Open"],["3","Pending"],["4","Resolved"],["5","Closed"]],
+  source: [["1","Email"],["2","Portal"],["3","Phone"],["7","Chat"],["9","Feedback widget"],["10","Outbound email"]]
+};
+var ATTR_LABEL = { group:"Group", type:"Ticket type", product:"Portal / product", source:"Source", priority:"Priority", status:"Status" };
+var PROP = { ticket_type:"type", group:"group_id", agent:"responder_id", product:"product_id" };
+var $ = function (id) { return document.getElementById(id); };
+function esc(s){return String(s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function setStatus(t, err){ $("status").textContent = t; $("status").className = err ? "err" : "muted"; }
+
+function opts(list, selected){
+  return list.map(function(o){ var v=o[0]; return '<option value="'+esc(v)+'"'+(selected.indexOf(String(v))>-1?" selected":"")+'>'+esc(o[1])+'</option>'; }).join("");
+}
+function valueList(attr){
+  if (STATIC[attr]) return STATIC[attr];
+  return meta[attr] || [];
+}
+
+function render(){
+  $("rules").innerHTML = rules.map(function(r,i){
+    var fieldOpts = meta.fields.length ? meta.fields : r.fields.map(function(f){return [f,f];});
+    var h = '<div class="rule" data-i="'+i+'"><div class="row">'
+      + '<input data-k="name" value="'+esc(r.name||"")+'" placeholder="Rule name" size="26"/>'
+      + '<select data-k="action">'
+      + [["hide","Hide fields if…"],["show_only","Show fields only if…"],["require","Require fields if…"]].map(function(a){return '<option value="'+a[0]+'"'+(r.action===a[0]?" selected":"")+'>'+a[1]+'</option>';}).join("")
+      + '</select><select data-k="match"><option value="all"'+(r.match!=="any"?" selected":"")+'>ALL conditions</option><option value="any"'+(r.match==="any"?" selected":"")+'>ANY condition</option></select>'
+      + '<label><input type="checkbox" data-k="enabled"'+(r.enabled!==false?" checked":"")+'/> Enabled</label>'
+      + '<button data-act="del">Delete rule</button></div>'
+      + '<div class="row"><span>Fields:</span><select multiple data-k="fields">'+opts(fieldOpts, r.fields||[])+'</select></div>';
+    (r.conditions||[]).forEach(function(c,j){
+      h += '<div class="row cond" data-j="'+j+'"><select data-c="attr">'
+        + Object.keys(ATTR_LABEL).map(function(a){return '<option value="'+a+'"'+(c.attr===a?" selected":"")+'>'+ATTR_LABEL[a]+'</option>';}).join("")
+        + '</select><select data-c="op"><option value="in"'+(c.op!=="not_in"?" selected":"")+'>is any of</option><option value="not_in"'+(c.op==="not_in"?" selected":"")+'>is none of</option></select>'
+        + '<select multiple data-c="values">'+opts(valueList(c.attr), (c.values||[]).map(String))+'</select>'
+        + '<button data-act="delc">×</button></div>';
+    });
+    return h + '<div class="row"><button data-act="addc">+ Condition</button><span class="muted">No conditions = always applies.</span></div></div>';
+  }).join("");
+}
+
+$("rules").addEventListener("change", function(e){
+  var rEl = e.target.closest(".rule"); if(!rEl) return;
+  var r = rules[+rEl.dataset.i], t = e.target;
+  if (t.dataset.k) {
+    r[t.dataset.k] = t.type==="checkbox" ? t.checked : t.multiple ? [].slice.call(t.selectedOptions).map(function(o){return o.value;}) : t.value;
+  } else if (t.dataset.c) {
+    var c = r.conditions[+t.closest(".cond").dataset.j];
+    c[t.dataset.c] = t.multiple ? [].slice.call(t.selectedOptions).map(function(o){return o.value;}) : t.value;
+    if (t.dataset.c==="attr") { c.values = []; render(); }
+  }
+});
+$("rules").addEventListener("click", function(e){
+  var act = e.target.dataset.act; if(!act) return;
+  var rEl = e.target.closest(".rule"), r = rules[+rEl.dataset.i];
+  if (act==="del") rules.splice(+rEl.dataset.i,1);
+  if (act==="addc") r.conditions.push({attr:"group",op:"in",values:[]});
+  if (act==="delc") r.conditions.splice(+e.target.closest(".cond").dataset.j,1);
+  render();
+});
+$("add").onclick = function(){
+  rules.push({id:String(Date.now()),name:"New rule",enabled:true,action:"hide",match:"all",fields:[],conditions:[{attr:"group",op:"in",values:[]}]});
+  render();
+};
+
+function call(tpl){
+  return client.request.invokeTemplate(tpl, { context: { domain: $("domain").value.trim(), api_key: $("api_key").value.trim() } })
+    .then(function(r){ return JSON.parse(r.response); });
+}
+$("load").onclick = function(){
+  setStatus("Loading…");
+  Promise.all([call("getGroups"), call("getTicketFields"), call("getProducts").catch(function(){return [];})]).then(function(res){
+    meta.group = res[0].map(function(g){return [String(g.id), g.name];});
+    meta.product = res[2].map(function(p){return [String(p.id), p.name];});
+    meta.fields = []; meta.type = [];
+    res[1].forEach(function(f){
+      var custom = /^custom_/.test(f.field_type);
+      var prop = custom ? f.name.replace(/_\d+$/, "") : (PROP[f.name] || f.name);
+      if (f.name==="ticket_type") meta.type = (f.choices||[]).map(function(c){return [c,c];});
+      if (["requester","company","description","subject"].indexOf(f.name)===-1 || custom) meta.fields.push([prop, f.label_for_customers && !custom ? f.label : f.label]);
+    });
+    setStatus("Loaded " + meta.group.length + " groups, " + meta.fields.length + " fields.");
+    render();
+  }).catch(function(e){ setStatus("Could not load from Freshdesk – check domain/API key. (Ids can still be typed by editing saved JSON.)", true); });
+};
+
+function getConfigs(c){
+  $("domain").value = c.domain || ""; $("api_key").value = c.api_key || "";
+  try { rules = JSON.parse(c.rules || "[]"); } catch(e){ rules = []; }
+  render();
+  if (c.domain && c.api_key) $("load").click();
+}
+function validate(){
+  return !!$("domain").value.trim() && !!$("api_key").value.trim() &&
+    rules.every(function(r){ return r.fields && r.fields.length; });
+}
+function postConfigs(){
+  return { __meta: { secure: ["api_key"] }, domain: $("domain").value.trim(), api_key: $("api_key").value.trim(), rules: JSON.stringify(rules) };
+}
+app.initialized().then(function(c){ client = c; });
+</script>
+</body>
+</html>

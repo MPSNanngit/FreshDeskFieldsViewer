@@ -96,3 +96,4 @@ h2 { font-size: 13px; margin: 0; text-transform: uppercase; letter-spacing: .04e
 .manual input { width: 100%; font: inherit; padding: 7px 10px; border: 1px solid var(--line); border-radius: 6px; }
 .notice { margin: 0 14px 8px; padding: 8px 10px; border-radius: 6px; background: var(--hide-soft); color: var(--hide); font-size: 12px; }
 .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.version { font-size: 11px; font-weight: 600; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 1px 7px; vertical-align: middle; }

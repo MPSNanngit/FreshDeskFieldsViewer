@@ -23,14 +23,35 @@ function logInfo() {
   console.info.apply(console, ["Field Rules:"].concat(Array.prototype.slice.call(arguments)));
 }
 
+const notified = {};
+
+// Pops up a Freshdesk notice (once per field) so problems are visible without opening the console.
+function notifyFailure(client, field, err) {
+  if (notified[field]) return Promise.resolve();
+  notified[field] = true;
+  const why = (err && (err.message || err.status)) || "unknown reason";
+  return client.interface.trigger("showNotify", {
+    type: "warning",
+    message: "Field Rules could not hide/show \"" + field + "\" (" + why + ")"
+  }).catch(logError);
+}
+
 function setVisible(client, field, visible) {
   const action = visible ? "show" : "hide";
+  const errors = [];
   return Promise.all(ifaceIds(field).map(function (id) {
-    return client.interface.trigger(action, { id: id }).then(function () { return id; }).catch(function () { return null; });
+    return client.interface.trigger(action, { id: id }).then(function () { return id; }).catch(function (err) {
+      errors.push(err);
+      return null;
+    });
   })).then(function (ok) {
     const worked = ok.filter(Boolean);
-    if (worked.length) logInfo(action, field, "via id", worked.join(", "));
-    else logError(action + " failed for " + field + " (tried " + ifaceIds(field).join(", ") + ")");
+    if (worked.length) {
+      logInfo(action, field, "via id", worked.join(", "));
+      return null;
+    }
+    logError(action + " failed for " + field + " (tried " + ifaceIds(field).join(", ") + ")", errors);
+    return notifyFailure(client, field, errors[0]);
   });
 }
 

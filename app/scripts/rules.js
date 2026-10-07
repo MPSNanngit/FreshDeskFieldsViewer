@@ -337,6 +337,10 @@ function save() {
     r.fields.forEach(function (f) { payload.labels[f] = FieldRules.labelOf(S.meta.fields, f); });
   });
   const skipped = S.rules.length - payload.rules.length;
+  if (!S.canEdit) {
+    setStatus("View only – your email is not in the app's editor list.", "error");
+    return Promise.resolve();
+  }
   if (!S.client) {
     setStatus("Not connected to Freshdesk yet – cannot save. Reload the page and try again.", "error");
     return Promise.resolve();

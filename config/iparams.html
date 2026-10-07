@@ -25,7 +25,7 @@
 <button id="add" class="primary">+ Add rule</button>
 
 <script>
-var client, rules = [], meta = { fields: [], group: [], product: [], type: [] };
+var clientReady = app.initialized(), rules = [], meta = { fields: [], group: [], product: [], type: [] };
 var STATIC = {
   priority: [["1","Low"],["2","Medium"],["3","High"],["4","Urgent"]],
   status: [["2","Open"],["3","Pending"],["4","Resolved"],["5","Closed"]],
@@ -47,7 +47,9 @@ function valueList(attr){
 
 function render(){
   $("rules").innerHTML = rules.map(function(r,i){
-    var fieldOpts = meta.fields.length ? meta.fields : r.fields.map(function(f){return [f,f];});
+    var fieldInput = meta.fields.length
+      ? '<select multiple data-k="fields">'+opts(meta.fields, r.fields||[])+'</select>'
+      : '<input data-k="fields" data-list="1" size="50" placeholder="e.g. priority, cf_order_number" value="'+esc((r.fields||[]).join(", "))+'"/>';
     var h = '<div class="rule" data-i="'+i+'"><div class="row">'
       + '<input data-k="name" value="'+esc(r.name||"")+'" placeholder="Rule name" size="26"/>'
       + '<select data-k="action">'
@@ -55,26 +57,33 @@ function render(){
       + '</select><select data-k="match"><option value="all"'+(r.match!=="any"?" selected":"")+'>ALL conditions</option><option value="any"'+(r.match==="any"?" selected":"")+'>ANY condition</option></select>'
       + '<label><input type="checkbox" data-k="enabled"'+(r.enabled!==false?" checked":"")+'/> Enabled</label>'
       + '<button data-act="del">Delete rule</button></div>'
-      + '<div class="row"><span>Fields:</span><select multiple data-k="fields">'+opts(fieldOpts, r.fields||[])+'</select></div>';
+      + '<div class="row"><span>Fields:</span>'+fieldInput+'</div>';
     (r.conditions||[]).forEach(function(c,j){
       h += '<div class="row cond" data-j="'+j+'"><select data-c="attr">'
         + Object.keys(ATTR_LABEL).map(function(a){return '<option value="'+a+'"'+(c.attr===a?" selected":"")+'>'+ATTR_LABEL[a]+'</option>';}).join("")
         + '</select><select data-c="op"><option value="in"'+(c.op!=="not_in"?" selected":"")+'>is any of</option><option value="not_in"'+(c.op==="not_in"?" selected":"")+'>is none of</option></select>'
-        + '<select multiple data-c="values">'+opts(valueList(c.attr), (c.values||[]).map(String))+'</select>'
+        + (valueList(c.attr).length
+            ? '<select multiple data-c="values">'+opts(valueList(c.attr), (c.values||[]).map(String))+'</select>'
+            : '<input data-c="values" data-list="1" size="30" placeholder="ids or names, comma-separated" value="'+esc((c.values||[]).join(", "))+'"/>')
         + '<button data-act="delc">×</button></div>';
     });
     return h + '<div class="row"><button data-act="addc">+ Condition</button><span class="muted">No conditions = always applies.</span></div></div>';
   }).join("");
 }
 
+function inputValue(t){
+  if (t.multiple) return [].slice.call(t.selectedOptions).map(function(o){return o.value;});
+  if (t.dataset.list) return t.value.split(",").map(function(v){return v.trim();}).filter(Boolean);
+  return t.value;
+}
 $("rules").addEventListener("change", function(e){
   var rEl = e.target.closest(".rule"); if(!rEl) return;
   var r = rules[+rEl.dataset.i], t = e.target;
   if (t.dataset.k) {
-    r[t.dataset.k] = t.type==="checkbox" ? t.checked : t.multiple ? [].slice.call(t.selectedOptions).map(function(o){return o.value;}) : t.value;
+    r[t.dataset.k] = t.type==="checkbox" ? t.checked : inputValue(t);
   } else if (t.dataset.c) {
     var c = r.conditions[+t.closest(".cond").dataset.j];
-    c[t.dataset.c] = t.multiple ? [].slice.call(t.selectedOptions).map(function(o){return o.value;}) : t.value;
+    c[t.dataset.c] = inputValue(t);
     if (t.dataset.c==="attr") { c.values = []; render(); }
   }
 });
@@ -91,9 +100,25 @@ $("add").onclick = function(){
   render();
 };
 
+function domainValue(){
+  return $("domain").value.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+}
+function withTimeout(p, ms){
+  return Promise.race([p, new Promise(function(_, reject){
+    setTimeout(function(){ reject(new Error("No response after " + ms / 1000 + "s")); }, ms);
+  })]);
+}
 function call(tpl){
-  return client.request.invokeTemplate(tpl, { context: { domain: $("domain").value.trim(), api_key: $("api_key").value.trim() } })
-    .then(function(r){ return JSON.parse(r.response); });
+  // Waits for the Freshdesk client; the settings page can call this before it is ready.
+  return withTimeout(clientReady.then(function(client){
+    return client.request.invokeTemplate(tpl, { context: { domain: domainValue(), api_key: $("api_key").value.trim() + ":X" } });
+  }), 20000).then(function(r){ return JSON.parse(r.response); });
+}
+function describeError(e){
+  if (!e) return "unknown error";
+  if (e.status === 401 || e.status === 403) return "API key rejected (" + e.status + ") – use an admin API key for " + domainValue();
+  if (e.status === 404) return "Not found (404) – check the domain";
+  return (e.status ? e.status + " " : "") + (e.message || e.response || String(e));
 }
 $("load").onclick = function(){
   setStatus("Loading…");
@@ -109,7 +134,10 @@ $("load").onclick = function(){
     });
     setStatus("Loaded " + meta.group.length + " groups, " + meta.fields.length + " fields.");
     render();
-  }).catch(function(e){ setStatus("Could not load from Freshdesk – check domain/API key. (Ids can still be typed by editing saved JSON.)", true); });
+  }).catch(function(e){
+    setStatus("Could not load from Freshdesk: " + describeError(e) + ". You can still type field names and ids below, comma-separated.", true);
+    render();
+  });
 };
 
 function getConfigs(c){
@@ -123,9 +151,8 @@ function validate(){
     rules.every(function(r){ return r.fields && r.fields.length; });
 }
 function postConfigs(){
-  return { __meta: { secure: ["api_key"] }, domain: $("domain").value.trim(), api_key: $("api_key").value.trim(), rules: JSON.stringify(rules) };
+  return { __meta: { secure: ["api_key"] }, domain: domainValue(), api_key: $("api_key").value.trim(), rules: JSON.stringify(rules) };
 }
-app.initialized().then(function(c){ client = c; });
 </script>
 </body>
 </html>
